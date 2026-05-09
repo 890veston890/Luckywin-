@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>robot</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap" rel="stylesheet">
+
+<style>
+:root { 
+--gold: #dfbd69;
+--tai: #00ffcc;
+--xiu: #ff0055;
+--bg: rgba(10, 10, 10, 0.95);
+}
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:'Inter',sans-serif;
+}
+
+body{
+background:#000;
+overflow:hidden;
+}
+
+/* INPUT LINK */
+.link-box{
+position:fixed;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+background:#111;
+padding:20px;
+border-radius:10px;
+z-index:99999;
+width:280px;
+border:1px solid rgba(223,189,105,.4);
+}
+
+.link-box input{
+width:100%;
+padding:10px;
+background:#000;
+border:none;
+color:#fff;
+margin-bottom:10px;
+border-radius:6px;
+}
+
+.link-box button{
+width:100%;
+padding:10px;
+background:#dfbd69;
+border:none;
+border-radius:6px;
+font-weight:700;
+}
+
+
+/* Game */
+
+.game-container{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+z-index:1;
+display:none;
+}
+
+iframe{
+width:100%;
+height:100%;
+border:none;
+}
+
+
+/* Tool Wrapper */
+.tool-wrapper {
+position: fixed;
+top: 20%;
+left: 10px;
+z-index: 9999;
+display: none;
+align-items: center;
+gap: 8px;
+cursor: grab;
+touch-action: none;
+}
+
+.robot-img {
+width: 60px;
+height: 60px;
+animation: float 3s ease-in-out infinite;
+}
+
+.info-rect {
+background: var(--bg);
+border: 1px solid rgba(223, 189, 105, 0.4);
+border-radius: 8px;
+padding: 8px 15px;
+min-width: 150px;
+backdrop-filter: blur(10px);
+position: relative;
+}
+
+.led-status {
+position: absolute;
+top: 8px;
+right: 8px;
+width: 5px;
+height: 5px;
+border-radius: 50%;
+background: #333;
+}
+
+.p-label {
+font-size: 7px;
+color: var(--gold);
+}
+
+#phien_id {
+color: #fff;
+font-size: 11px;
+}
+
+.result-display {
+font-size: 18px;
+font-weight: 800;
+}
+
+.mode-tai .result-display {
+color: var(--tai);
+text-shadow: 0 0 10px var(--tai);
+}
+
+.mode-xiu .result-display {
+color: var(--xiu);
+text-shadow: 0 0 10px var(--xiu);
+}
+
+.mode-tai .led-status {
+background: var(--tai);
+animation: blink 0.6s infinite;
+}
+
+.mode-xiu .led-status {
+background: var(--xiu);
+animation: blink 0.6s infinite;
+}
+
+@keyframes float {
+0%,100% { transform: translateY(0); }
+50% { transform: translateY(-5px); }
+}
+
+@keyframes blink {
+0%,100% { opacity: 1; }
+50% { opacity: 0.3; }
+}
+
+
+/* Controls */
+
+.controls {
+position: fixed;
+right: 10px;
+top: 40%;
+display: none;
+flex-direction: column;
+gap: 8px;
+z-index: 10000;
+}
+
+.c-btn {
+width: 35px;
+height: 35px;
+background: var(--bg);
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+color: var(--gold);
+cursor: pointer;
+}
+
+</style>
+</head>
+
+<body>
+
+
+<div class="link-box" id="linkBox">
+<input id="gameLink" placeholder="Nhập link game">
+<button onclick="loadGame()">Vào Game</button>
+</div>
+
+
+<div class="game-container" id="gameBox">
+<iframe id="gameFrame"></iframe>
+</div>
+
+
+<div class="tool-wrapper" id="moveTool">
+<img src="https://i.postimg.cc/rwkZQhxp/Robot.gif" class="robot-img">
+
+<div class="info-rect" id="mainRect">
+<div class="led-status"></div>
+<div class="p-label">AI Analysis</div>
+<div id="phien_id">Phiên: ...</div>
+<div class="result-display" id="res_val">WAITING</div>
+</div>
+</div>
+
+
+<div class="controls" id="controls">
+<div class="c-btn" onclick="toggleVoice()">
+<i id="voiceIcon" class="fas fa-volume-up"></i>
+</div>
+
+<div class="c-btn" onclick="location.reload()">
+<i class="fas fa-sync"></i>
+</div>
+
+<div class="c-btn" onclick="hideTool()">
+<i class="fas fa-eye"></i>
+</div>
+</div>
+
+
+<script>
+
+function loadGame(){
+
+let link=document.getElementById("gameLink").value
+
+if(!link) return alert("Nhập link game")
+
+document.getElementById("gameFrame").src=link
+document.getElementById("gameBox").style.display="block"
+document.getElementById("linkBox").style.display="none"
+document.getElementById("moveTool").style.display="flex"
+document.getElementById("controls").style.display="flex"
+
+updateVIP()
+
+}
+
+
+
+const API_URL =
+"https://apiluck-emur.onrender.com/api/luck"
+
+const PROXY =
+"https://api.allorigins.win/raw?url="
+
+let lastP = ""
+let isVoice = true
+
+
+function speak(text){
+if(!isVoice)return
+
+speechSynthesis.cancel()
+
+let msg = new SpeechSynthesisUtterance(text)
+msg.lang = 'vi-VN'
+
+speechSynthesis.speak(msg)
+}
+
+
+
+async function updateVIP(){
+
+try{
+
+const res =
+await fetch(
+PROXY +
+encodeURIComponent(API_URL) +
+"&t=" + Date.now()
+)
+
+const data = await res.json()
+
+if(data.phien_hien_tai){
+
+document.getElementById("phien_id")
+.innerText =
+"Phiên: #" + data.phien_hien_tai
+
+
+if(data.phien_hien_tai !== lastP){
+
+lastP = data.phien_hien_tai
+
+let rect = document.getElementById("mainRect")
+let val = document.getElementById("res_val")
+
+let kq = data.du_doan.toUpperCase()
+let tin = data.do_tin_cay || 0
+
+rect.classList.remove("mode-tai","mode-xiu")
+
+if(kq.includes("TAI") || kq.includes("TÀI")){
+
+rect.classList.add("mode-tai")
+val.innerText = "TÀI " + tin + "%"
+speak("Tài")
+
+}else{
+
+rect.classList.add("mode-xiu")
+val.innerText = "XỈU " + tin + "%"
+speak("Xỉu")
+
+}
+
+}
+
+}
+
+}catch(e){
+document.getElementById("phien_id").innerText =
+"Server đang khởi động..."
+}
+
+}
+
+
+setInterval(updateVIP,1500)
+
+
+
+function toggleVoice(){
+isVoice = !isVoice
+
+document.getElementById("voiceIcon").className =
+isVoice ?
+"fas fa-volume-up" :
+"fas fa-volume-mute"
+}
+
+
+function hideTool(){
+
+const t = document.getElementById("moveTool")
+
+t.style.display =
+t.style.display === "none" ?
+"flex" :
+"none"
+
+}
+
+
+
+/* drag */
+
+const tool = document.getElementById("moveTool")
+
+let offset = [0,0]
+let isDown = false
+
+const start = (e) => {
+
+isDown = true
+
+let ev = e.touches ? e.touches[0] : e
+
+offset = [
+tool.offsetLeft - ev.clientX,
+tool.offsetTop - ev.clientY
+]
+
+}
+
+const move = (e) => {
+
+if (!isDown) return
+
+let ev = e.touches ? e.touches[0] : e
+
+tool.style.left =
+(ev.clientX + offset[0]) + 'px'
+
+tool.style.top =
+(ev.clientY + offset[1]) + 'px'
+
+}
+
+tool.addEventListener('mousedown', start)
+document.addEventListener('mousemove', move)
+document.addEventListener('mouseup', () => isDown = false)
+
+tool.addEventListener('touchstart', start)
+document.addEventListener('touchmove', move)
+document.addEventListener('touchend', () => isDown = false)
+
+</script>
+
+</body>
+</html>
